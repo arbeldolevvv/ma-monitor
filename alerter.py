@@ -1,6 +1,7 @@
 import os
 import smtplib
 from datetime import datetime
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from dotenv import load_dotenv
@@ -14,10 +15,17 @@ SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
 
 _SMA_EMOJI = {
-    "CROSS_ABOVE":       "📈",
-    "TOUCH_FROM_ABOVE":  "📈",
-    "CROSS_BELOW":       "📉",
-    "TOUCH_FROM_BELOW":  "📉",
+    "CROSS_ABOVE":      "📈",
+    "TOUCH_FROM_ABOVE": "📈",
+    "CROSS_BELOW":      "📉",
+    "TOUCH_FROM_BELOW": "📉",
+}
+
+_SMA_COLOR = {
+    "CROSS_ABOVE":      "#3fb950",
+    "TOUCH_FROM_ABOVE": "#3fb950",
+    "CROSS_BELOW":      "#f85149",
+    "TOUCH_FROM_BELOW": "#f85149",
 }
 
 _TIER_EMOJI = {
@@ -26,55 +34,115 @@ _TIER_EMOJI = {
     "HIGH":   "🔴",
 }
 
+_ACTION_COLOR = {
+    "ENTERED": "#f85149",
+    "EXITED":  "#3fb950",
+}
+
 
 def _ts() -> str:
     return datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
 
 
-def _build_body(
+def _row(cells_html: list[str]) -> str:
+    tds = "".join(f'<td style="padding:7px 10px;border-bottom:1px solid #21262d;">{c}</td>' for c in cells_html)
+    return f"<tr>{tds}</tr>"
+
+
+def _build_html(
     sma_alerts: list[Event],
     atr_alerts: list[ATREvent],
     tickers_scanned: int,
 ) -> str:
     date_str = datetime.now().strftime("%B %d, %Y")
     total    = len(sma_alerts) + len(atr_alerts)
-    sep      = "-" * 36
 
-    lines = [
-        sep,
-        f"MA Monitor — {date_str}",
-        sep,
-    ]
-
+    # ── SMA section ──────────────────────────────────────────────────────────
+    sma_html = ""
     if sma_alerts:
-        lines.append("")
-        lines.append(f"📊 SMA 150 ALERTS ({len(sma_alerts)})")
+        rows = ""
         for e in sma_alerts:
             emoji = _SMA_EMOJI.get(e.event_type, "📊")
+            color = _SMA_COLOR.get(e.event_type, "#c9d1d9")
             sign  = "+" if e.distance_pct >= 0 else ""
-            lines.append(
-                f"{e.ticker} {emoji} SMA {e.ma_period} — "
-                f"Close: ${e.latest_close:.2f} | "
-                f"MA: ${e.ma_value:.2f} | "
-                f"Dist: {sign}{e.distance_pct:.2f}%"
-            )
+            rows += _row([
+                f'<span style="font-weight:bold;color:#e6edf3;">{e.ticker}</span>',
+                f'<span style="color:{color};">{emoji} {e.event_type}</span>',
+                f'<span style="color:#8b949e;">SMA {e.ma_period} &nbsp;|&nbsp; '
+                f'Close: <span style="color:#e6edf3;">${e.latest_close:.2f}</span> &nbsp;|&nbsp; '
+                f'MA: ${e.ma_value:.2f} &nbsp;|&nbsp; '
+                f'Dist: <span style="color:{color};">{sign}{e.distance_pct:.2f}%</span></span>',
+            ])
 
+        sma_html = f"""
+        <div style="margin-bottom:24px;border-left:3px solid #388bfd;padding-left:12px;">
+          <div style="color:#388bfd;font-weight:bold;font-size:14px;margin-bottom:8px;">
+            &#128202; SMA 150 ALERTS ({len(sma_alerts)})
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-family:monospace;font-size:13px;">
+            {rows}
+          </table>
+        </div>"""
+
+    # ── ATR section ──────────────────────────────────────────────────────────
+    atr_html = ""
     if atr_alerts:
-        lines.append("")
-        lines.append(f"📉 ATR PULLBACK ALERTS ({len(atr_alerts)})")
+        rows = ""
         for e in atr_alerts:
-            circle = _TIER_EMOJI.get(e.volatility_tier, "⚪")
-            lines.append(
-                f"{e.ticker} ({e.atr_pct:.2f}%) {circle} — "
-                f"Pullback: {e.current_pullback:.1f}% | "
-                f"52W High: ${e.week52_high:.2f} | "
-                f"Close: ${e.latest_close:.2f}"
-            )
+            tier_emoji   = _TIER_EMOJI.get(e.volatility_tier, "⚪")
+            action_color = _ACTION_COLOR.get(e.action, "#c9d1d9")
+            rows += _row([
+                f'<span style="font-weight:bold;color:#e6edf3;">{e.ticker}</span> '
+                f'<span style="color:#8b949e;">({e.atr_pct:.2f}%)</span> {tier_emoji}',
+                f'<span style="color:{action_color};">{e.action}</span>',
+                f'<span style="color:#8b949e;">'
+                f'Pullback: <span style="color:#f85149;">{e.current_pullback:.1f}%</span> &nbsp;|&nbsp; '
+                f'52W High: ${e.week52_high:.2f} &nbsp;|&nbsp; '
+                f'Close: <span style="color:#e6edf3;">${e.latest_close:.2f}</span></span>',
+            ])
 
-    lines.append("")
-    lines.append(sep)
-    lines.append(f"{total} alert(s) | {tickers_scanned} tickers scanned")
-    return "\n".join(lines)
+        atr_html = f"""
+        <div style="margin-bottom:24px;border-left:3px solid #d29922;padding-left:12px;">
+          <div style="color:#d29922;font-weight:bold;font-size:14px;margin-bottom:8px;">
+            &#128201; ATR PULLBACK ALERTS ({len(atr_alerts)})
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-family:monospace;font-size:13px;">
+            {rows}
+          </table>
+        </div>"""
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background:#0d1117;font-family:monospace;">
+  <div style="max-width:700px;margin:0 auto;background:#0d1117;color:#c9d1d9;">
+
+    <!-- Header -->
+    <div style="padding:24px 24px 16px 24px;border-bottom:1px solid #21262d;">
+      <div style="font-size:22px;font-weight:bold;color:#e6edf3;letter-spacing:0.5px;">
+        MA Monitor
+      </div>
+      <div style="font-size:13px;color:#8b949e;margin-top:4px;">{date_str}</div>
+    </div>
+
+    <!-- Alerts -->
+    <div style="padding:20px 24px;">
+      {sma_html}
+      {atr_html}
+    </div>
+
+    <!-- Footer -->
+    <div style="padding:12px 24px;border-top:1px solid #21262d;
+                font-size:12px;color:#8b949e;font-family:monospace;">
+      {total} alert(s) &nbsp;&#183;&nbsp; {tickers_scanned} tickers scanned
+    </div>
+
+  </div>
+</body>
+</html>"""
 
 
 def send_alert(
@@ -82,7 +150,7 @@ def send_alert(
     atr_alerts: list[ATREvent],
     tickers_scanned: int,
 ) -> None:
-    """Send a single plain-text summary email covering SMA and ATR alerts.
+    """Send a single HTML summary email covering SMA and ATR alerts.
 
     Silent if both lists are empty. Logs and returns on any error — never raises.
     """
@@ -100,12 +168,13 @@ def send_alert(
     total    = len(sma_alerts) + len(atr_alerts)
     date_str = datetime.now().strftime("%B %d, %Y")
     subject  = f"MA Monitor — {total} Alert(s) — {date_str}"
-    body     = _build_body(sma_alerts, atr_alerts, tickers_scanned)
+    html     = _build_html(sma_alerts, atr_alerts, tickers_scanned)
 
-    msg = MIMEText(body, "plain", "utf-8")
+    msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"]    = sender
     msg["To"]      = recipient
+    msg.attach(MIMEText(html, "html", "utf-8"))
 
     try:
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as smtp:
