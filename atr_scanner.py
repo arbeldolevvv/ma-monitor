@@ -103,14 +103,3 @@ def scan_atr(ticker: str, df: pd.DataFrame) -> list[ATREvent]:
     return []
 
 
-def get_atr_snapshot(ticker: str, df: pd.DataFrame) -> ATREvent | None:
-    """Return current ATR data regardless of whether the threshold is breached.
-
-    Used by main.py solely for exit-zone detection — when a ticker was
-    previously marked IN but no longer meets its pullback threshold.
-    """
-    event = _compute(ticker, df)
-    if event is None:
-        return None
-    event.action = "EXITED"
-    return event

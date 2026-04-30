@@ -6,11 +6,11 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from config import WATCHLIST, MA_PERIOD, SCAN_TIME, TIMEZONE
 from fetcher import fetch_ticker
 from scanner import scan_ticker
-from atr_scanner import scan_atr, get_atr_snapshot
+from atr_scanner import scan_atr
 from state_manager import (
     load_state, save_state,
     should_alert, mark_alerted,
-    should_alert_atr, mark_alerted_atr, mark_exited_atr,
+    should_alert_atr, mark_alerted_atr,
 )
 from alerter import send_alert
 
@@ -40,7 +40,7 @@ def run_scan() -> None:
                 sma_alerts.append(event)
                 mark_alerted(state, ticker, MA_PERIOD, today)
 
-        # --- ATR scan: ENTERED detection ---
+        # --- ATR scan: ENTERED detection only ---
         atr_events = scan_atr(ticker, df)
         if atr_events:
             event = atr_events[0]
@@ -48,17 +48,6 @@ def run_scan() -> None:
                 atr_alerts.append(event)
                 mark_alerted_atr(state, ticker, event.volatility_tier, today)
             # else: already IN → silence
-        else:
-            # EXIT detection: check all tiers this ticker may have been IN
-            for tier in ("HIGH", "MEDIUM", "LOW"):
-                k = f"ATR_{ticker}_{tier}"
-                if state.get(k, {}).get("status") == "IN":
-                    snapshot = get_atr_snapshot(ticker, df)
-                    if snapshot:
-                        snapshot.action = "EXITED"
-                        snapshot.volatility_tier = tier  # preserve the tier it was IN
-                        atr_alerts.append(snapshot)
-                        mark_exited_atr(state, ticker, tier, today)
 
     total = len(sma_alerts) + len(atr_alerts)
     if sma_alerts or atr_alerts:

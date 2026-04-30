@@ -34,11 +34,6 @@ _TIER_EMOJI = {
     "HIGH":   "🔴",
 }
 
-_ACTION_COLOR = {
-    "ENTERED": "#f85149",
-    "EXITED":  "#3fb950",
-}
-
 
 def _ts() -> str:
     return datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
@@ -89,16 +84,11 @@ def _build_html(
     if atr_alerts:
         rows = ""
         for e in atr_alerts:
-            tier_emoji   = _TIER_EMOJI.get(e.volatility_tier, "⚪")
-            action_color = _ACTION_COLOR.get(e.action, "#c9d1d9")
+            tier_emoji = _TIER_EMOJI.get(e.volatility_tier, "⚪")
             rows += _row([
-                f'<span style="font-weight:bold;color:#e6edf3;">{e.ticker}</span> '
-                f'<span style="color:#8b949e;">({e.atr_pct:.2f}%)</span> {tier_emoji}',
-                f'<span style="color:{action_color};">{e.action}</span>',
-                f'<span style="color:#8b949e;">'
-                f'Pullback: <span style="color:#f85149;">{e.current_pullback:.1f}%</span> &nbsp;|&nbsp; '
-                f'52W High: ${e.week52_high:.2f} &nbsp;|&nbsp; '
-                f'Close: <span style="color:#e6edf3;">${e.latest_close:.2f}</span></span>',
+                f'<span style="font-weight:bold;color:#e6edf3;">{e.ticker}</span>',
+                f'<span style="color:#f85149;font-weight:bold;">{e.current_pullback:.1f}%</span>'
+                f'<span style="color:#8b949e;"> from 52W High &nbsp;(ATR: {e.atr_pct:.2f}% {tier_emoji})</span>',
             ])
 
         atr_html = f"""
