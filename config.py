@@ -6,6 +6,9 @@ WATCHLIST = [
     "LITE", "COHR", "MU", "PLTR", "QCOM", "TSM", "AMKR", "NVDA", "AAPL",
     "GOOGL", "META", "MSFT", "TSLA", "JPM", "URA", "UFO",
     "CAT", "FN", "CLS",
+    "AMZN", "MRVL", "STLD", "MOD", "NUE", "JAZZ", "MTSI",
+    "CMI", "POWL", "MKSI", "PRIM", "APG", "AXTI",
+    "SMTC", "CRS", "MTZ", "EME", "DELL",
 ]
 
 MA_PERIOD = 150
