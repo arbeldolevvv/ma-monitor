@@ -1,5 +1,5 @@
 import argparse
-from datetime import datetime, date
+from datetime import datetime
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 
@@ -7,11 +7,7 @@ from config import WATCHLIST, MA_PERIOD, SCAN_TIME, TIMEZONE
 from fetcher import fetch_ticker
 from scanner import scan_ticker
 from atr_scanner import scan_atr
-from state_manager import (
-    load_state, save_state,
-    should_alert, mark_alerted,
-    should_alert_atr, mark_alerted_atr,
-)
+from bearish_scanner import scan_bearish
 from alerter import send_alert
 
 
@@ -22,37 +18,24 @@ def _ts() -> str:
 def run_scan() -> None:
     print(f"{_ts()} Scan started — {len(WATCHLIST)} tickers")
 
-    state      = load_state()
-    today      = date.today()
-    sma_alerts = []
-    atr_alerts = []
-    scanned    = 0
+    sma_alerts     = []
+    atr_alerts     = []
+    bearish_alerts = []
+    scanned        = 0
 
     for ticker in WATCHLIST:
-        df = fetch_ticker(ticker)   # fetched ONCE per ticker
+        df = fetch_ticker(ticker)
         if df is None:
             continue
         scanned += 1
 
-        # --- SMA scan ---
-        for event in scan_ticker(ticker, df):
-            if should_alert(state, ticker, MA_PERIOD, today):
-                sma_alerts.append(event)
-                mark_alerted(state, ticker, MA_PERIOD, today)
+        sma_alerts.extend(scan_ticker(ticker, df))
+        atr_alerts.extend(scan_atr(ticker, df))
+        bearish_alerts.extend(scan_bearish(ticker, df))
 
-        # --- ATR scan: ENTERED detection only ---
-        atr_events = scan_atr(ticker, df)
-        if atr_events:
-            event = atr_events[0]
-            if should_alert_atr(state, ticker, event.volatility_tier):
-                atr_alerts.append(event)
-                mark_alerted_atr(state, ticker, event.volatility_tier, today)
-            # else: already IN → silence
-
-    total = len(sma_alerts) + len(atr_alerts)
-    if sma_alerts or atr_alerts:
-        send_alert(sma_alerts, atr_alerts, scanned)
-        save_state(state)
+    total = len(sma_alerts) + len(atr_alerts) + len(bearish_alerts)
+    if sma_alerts or atr_alerts or bearish_alerts:
+        send_alert(sma_alerts, atr_alerts, bearish_alerts, scanned)
         print(f"{_ts()} Scan complete — {total} alert(s) across {scanned} tickers scanned")
     else:
         print(f"{_ts()} Scan complete — no events detected across {scanned} tickers scanned")

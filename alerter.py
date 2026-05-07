@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 
 from scanner import Event
 from atr_scanner import ATREvent
+from bearish_scanner import BearishEvent
 
 load_dotenv()
 
@@ -47,10 +48,11 @@ def _row(cells_html: list[str]) -> str:
 def _build_html(
     sma_alerts: list[Event],
     atr_alerts: list[ATREvent],
+    bearish_alerts: list[BearishEvent],
     tickers_scanned: int,
 ) -> str:
     date_str = datetime.now().strftime("%B %d, %Y")
-    total    = len(sma_alerts) + len(atr_alerts)
+    total    = len(sma_alerts) + len(atr_alerts) + len(bearish_alerts)
 
     # ── SMA section ──────────────────────────────────────────────────────────
     sma_html = ""
@@ -101,6 +103,28 @@ def _build_html(
           </table>
         </div>"""
 
+    # ── Bearish streak section ────────────────────────────────────────────────
+    bearish_html = ""
+    if bearish_alerts:
+        rows = ""
+        for e in bearish_alerts:
+            rows += _row([
+                f'<span style="font-weight:bold;color:#e6edf3;">{e.ticker}</span>',
+                f'<span style="color:#da3633;font-weight:bold;">{e.streak} red candles in a row</span>'
+                f'<span style="color:#8b949e;"> &nbsp;|&nbsp; Close: '
+                f'<span style="color:#e6edf3;">${e.latest_close:.2f}</span></span>',
+            ])
+
+        bearish_html = f"""
+        <div style="margin-bottom:24px;border-left:3px solid #da3633;padding-left:12px;">
+          <div style="color:#da3633;font-weight:bold;font-size:14px;margin-bottom:8px;">
+            &#128308; BEARISH STREAK ALERTS ({len(bearish_alerts)})
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-family:monospace;font-size:13px;">
+            {rows}
+          </table>
+        </div>"""
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -122,6 +146,7 @@ def _build_html(
     <div style="padding:20px 24px;">
       {sma_html}
       {atr_html}
+      {bearish_html}
     </div>
 
     <!-- Footer -->
@@ -138,13 +163,14 @@ def _build_html(
 def send_alert(
     sma_alerts: list[Event],
     atr_alerts: list[ATREvent],
+    bearish_alerts: list[BearishEvent],
     tickers_scanned: int,
 ) -> None:
-    """Send a single HTML summary email covering SMA and ATR alerts.
+    """Send a single HTML summary email covering SMA, ATR, and bearish alerts.
 
-    Silent if both lists are empty. Logs and returns on any error — never raises.
+    Silent if all lists are empty. Logs and returns on any error — never raises.
     """
-    if not sma_alerts and not atr_alerts:
+    if not sma_alerts and not atr_alerts and not bearish_alerts:
         return
 
     sender    = os.getenv("EMAIL_SENDER", "")
@@ -155,10 +181,10 @@ def send_alert(
         print(f"{_ts()} ERROR: Email credentials missing — check your .env file")
         return
 
-    total    = len(sma_alerts) + len(atr_alerts)
+    total    = len(sma_alerts) + len(atr_alerts) + len(bearish_alerts)
     date_str = datetime.now().strftime("%B %d, %Y")
     subject  = f"MA Monitor — {total} Alert(s) — {date_str}"
-    html     = _build_html(sma_alerts, atr_alerts, tickers_scanned)
+    html     = _build_html(sma_alerts, atr_alerts, bearish_alerts, tickers_scanned)
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
