@@ -110,7 +110,7 @@ def _build_html(
         for e in bearish_alerts:
             rows += _row([
                 f'<span style="font-weight:bold;color:#e6edf3;">{e.ticker}</span>',
-                f'<span style="color:#da3633;font-weight:bold;">{e.streak} red candles in a row</span>'
+                f'<span style="color:#da3633;font-weight:bold;">{e.red_count}/7 red candles</span>'
                 f'<span style="color:#8b949e;"> &nbsp;|&nbsp; Close: '
                 f'<span style="color:#e6edf3;">${e.latest_close:.2f}</span></span>',
             ])
